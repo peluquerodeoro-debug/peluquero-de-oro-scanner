@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control de Acceso - Peluquero de Oro</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Arial, sans-serif;
+    background: #1a1a1a;
+    color: white;
+    text-align: center;
+    padding: 16px;
+  }
+  h2 {
+    background: linear-gradient(135deg, #d4af37, #b8860b);
+    padding: 16px;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    font-size: 18px;
+  }
+  #reader {
+    width: 100%;
+    max-width: 400px;
+    margin: 0 auto;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  #resultado {
+    margin-top: 20px;
+    padding: 20px;
+    border-radius: 12px;
+    font-size: 22px;
+    font-weight: bold;
+    min-height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    transition: background 0.3s;
+  }
+  .ok { background: #1e7e34; }
+  .error { background: #b02a2a; }
+  .warning { background: #c98a13; }
+  .idle { background: #333; }
+  #nombre { font-size: 16px; font-weight: normal; margin-top: 6px; }
+  #contador { margin-top: 16px; font-size: 14px; color: #aaa; }
+</style>
+</head>
+<body>
+  <h2>🏆 Control de Acceso<br>Peluquero de Oro</h2>
+  <div id="reader"></div>
+  <div id="resultado" class="idle">Apuntá la cámara al QR de la entrada</div>
+  <div id="contador">Ingresos registrados en esta sesión: <span id="cuenta">0</span></div>
+
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script>
+    // ⚠️ IMPORTANTE: reemplazá esta URL con la de TU implementación de Apps Script
+    const URL_SCRIPT = "https://script.google.com/macros/s/AKfycbxlDjWxup172e6IaGZD-xXBAFBFALri6Z1wEkJozt579D1PmHbwaHmFzdWGEsoCCs7P/exec";
+
+    let contadorIngresos = 0;
+    let procesando = false;
+
+    function mostrarResultado(clase, mensaje, nombre) {
+      const div = document.getElementById('resultado');
+      div.className = clase;
+      div.innerHTML = mensaje + (nombre ? '<div id="nombre">' + nombre + '</div>' : '');
+    }
+
+    async function onScanSuccess(decodedText) {
+      if (procesando) return;
+      procesando = true;
+      mostrarResultado('idle', '⏳ Verificando...', '');
+
+      try {
+        const resp = await fetch(URL_SCRIPT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ codigo: decodedText })
+        });
+        const data = await resp.json();
+
+        if (data.ok) {
+          contadorIngresos++;
+          document.getElementById('cuenta').innerText = contadorIngresos;
+          mostrarResultado('ok', data.mensaje, data.nombre);
+        } else if (data.duplicado) {
+          mostrarResultado('warning', data.mensaje, data.nombre);
+        } else {
+          mostrarResultado('error', data.mensaje, data.nombre || '');
+        }
+      } catch (err) {
+        mostrarResultado('error', '❌ Error de conexión', String(err));
+      }
+
+      setTimeout(function() {
+        procesando = false;
+        mostrarResultado('idle', 'Apuntá la cámara al QR de la entrada', '');
+      }, 1800);
+    }
+
+    const html5QrCode = new Html5Qrcode("reader");
+    html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      onScanSuccess
+    ).catch(function(err) {
+      mostrarResultado('error', 'No se pudo acceder a la cámara', String(err));
+    });
+  </script>
+</body>
+</html>
